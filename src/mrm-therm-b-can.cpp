@@ -65,9 +65,10 @@ void Mrm_therm_b_can::add(char * deviceName)
 /** Read CAN Bus message into local variables
 @param canId - CAN Bus id
 @param data - 8 bytes from CAN Bus message.
+@param length - number of data bytes
 @return - true if canId for this class
 */
-bool Mrm_therm_b_can::messageDecode(uint32_t canId, uint8_t data[8]){
+bool Mrm_therm_b_can::messageDecode(uint32_t canId, uint8_t data[8], uint8_t length){
 	for (uint8_t deviceNumber = 0; deviceNumber < nextFree; deviceNumber++)
 		if (isForMe(canId, deviceNumber)){
 			if (!messageDecodeCommon(canId, data, deviceNumber)) {
@@ -80,7 +81,7 @@ bool Mrm_therm_b_can::messageDecode(uint32_t canId, uint8_t data[8]){
 				break;
 				default:
 					robotContainer->print("Unknown command. ");
-					messagePrint(canId, 8, data, false);
+					messagePrint(canId, length, data, false);
 					errorCode = 205;
 					errorInDeviceNumber = deviceNumber;
 				}
