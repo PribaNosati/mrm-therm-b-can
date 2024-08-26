@@ -56,7 +56,7 @@ void Mrm_therm_b_can::add(char * deviceName)
 		canOut = CAN_ID_THERM_B_CAN7_OUT;
 		break;
 	default:
-		strcpy(errorMessage, "Too many mrm-therm-b-can\n\r");
+		sprintf(errorMessage, "Too many %s: %i.", _boardsName, nextFree);
 		return;
 	}
 	SensorBoard::add(deviceName, canIn, canOut);
@@ -80,7 +80,7 @@ bool Mrm_therm_b_can::messageDecode(uint32_t canId, uint8_t data[8], uint8_t len
 				}
 				break;
 				default:
-					robotContainer->print("Unknown command. ");
+					print("Unknown command. ");
 					messagePrint(canId, length, data, false);
 					errorCode = 205;
 					errorInDeviceNumber = deviceNumber;
@@ -98,7 +98,7 @@ bool Mrm_therm_b_can::messageDecode(uint32_t canId, uint8_t data[8], uint8_t len
 */
 int16_t Mrm_therm_b_can::reading(uint8_t deviceNumber){
 	if (deviceNumber >= nextFree) {
-		strcpy(errorMessage, "Mrm_therm_b_can overflow.");
+		sprintf(errorMessage, "%s %i doesn't exist.", _boardsName, deviceNumber);
 		return 0;
 	}
 	else
@@ -111,10 +111,10 @@ int16_t Mrm_therm_b_can::reading(uint8_t deviceNumber){
 /** Print all readings in a line
 */
 void Mrm_therm_b_can::readingsPrint() {
-	robotContainer->print("Therm:");
+	print("Therm:");
 	for (uint8_t deviceNumber = 0; deviceNumber < nextFree; deviceNumber++)
 		if (alive(deviceNumber))
-			robotContainer->print(" %i", reading(deviceNumber));
+			print(" %i", reading(deviceNumber));
 }
 
 
@@ -124,20 +124,20 @@ void Mrm_therm_b_can::readingsPrint() {
 */
 bool Mrm_therm_b_can::started(uint8_t deviceNumber) {
 	if (millis() - (*_lastReadingMs)[deviceNumber] > MRM_THERM_B_CAN_INACTIVITY_ALLOWED_MS || (*_lastReadingMs)[deviceNumber] == 0) {
-		// robotContainer->print("Start mrm-therm-b-can-b%i \n\r", deviceNumber);
+		// print("Start mrm-therm-b-can-b%i \n\r", deviceNumber);
 		for (uint8_t i = 0; i < 8; i++) { // 8 tries
 			start(deviceNumber, 0);
 			// Wait for 1. message.
 			uint32_t startMs = millis();
 			while (millis() - startMs < 50) {
 				if (millis() - (*_lastReadingMs)[deviceNumber] < 100) {
-					// robotContainer->print("Thermo confirmed\n\r"); 
+					// print("Thermo confirmed\n\r"); 
 					return true;
 				}
 				robotContainer->delayMs(1);
 			}
 		}
-		strcpy(errorMessage, "mrm-therm-b-can dead.\n\r");
+		sprintf(errorMessage, "%s %i dead.", _boardsName, deviceNumber);
 		return false;
 	}
 	else
@@ -155,13 +155,13 @@ void Mrm_therm_b_can::test()
 		for (uint8_t deviceNumber = 0; deviceNumber < nextFree; deviceNumber++) {
 			if (alive(deviceNumber)) {
 				if (pass++)
-					robotContainer->print(" ");
-				robotContainer->print("%i ", reading(deviceNumber));
+					print(" ");
+				print("%i ", reading(deviceNumber));
 			}
 		}
 		lastMs = millis();
 		if (pass)
-			robotContainer->print("\n\r");
+			print("\n\r");
 	}
 
 	//stop();
