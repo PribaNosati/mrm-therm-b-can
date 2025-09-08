@@ -7,8 +7,8 @@
 @param hardwareSerial - Serial, Serial1, Serial2,... - an optional serial port, for example for Bluetooth communication
 @param maxNumberOfBoards - maximum number of boards
 */
-Mrm_therm_b_can::Mrm_therm_b_can(Robot* robot, uint8_t maxNumberOfBoards) : 
-	SensorBoard(robot, 1, "Thermo", maxNumberOfBoards, ID_MRM_THERM_B_CAN, 1) {
+Mrm_therm_b_can::Mrm_therm_b_can(uint8_t maxNumberOfBoards) : 
+	SensorBoard(1, "Thermo", maxNumberOfBoards, ID_MRM_THERM_B_CAN, 1) {
 	readings = new std::vector<int16_t>(maxNumberOfBoards);
 }
 
@@ -56,7 +56,7 @@ void Mrm_therm_b_can::add(char * deviceName)
 		canOut = CAN_ID_THERM_B_CAN7_OUT;
 		break;
 	default:
-		sprintf(errorMessage, "Too many %s: %i.", _boardsName, nextFree);
+		sprintf(errorMessage, "Too many %s: %i.", _boardsName.c_str(), nextFree);
 		return;
 	}
 	SensorBoard::add(deviceName, canIn, canOut);
@@ -68,22 +68,19 @@ void Mrm_therm_b_can::add(char * deviceName)
 @param length - number of data bytes
 @return - true if canId for this class
 */
-bool Mrm_therm_b_can::messageDecode(uint32_t canId, uint8_t data[8], uint8_t length){
-	for (uint8_t deviceNumber = 0; deviceNumber < nextFree; deviceNumber++)
-		if (isForMe(canId, deviceNumber)){
-			if (!messageDecodeCommon(canId, data, deviceNumber)) {
-				switch (data[0]) {
+bool Mrm_therm_b_can::messageDecode(CANMessage& message) {
+	for (Device& device : devices)
+		if (isForMe(message.id, device)) {
+			if (!messageDecodeCommon(message, device)) {
+				switch (message.data[0]) {
 				case COMMAND_SENSORS_MEASURE_SENDING: {
-					int16_t temp = (data[2] << 8) | data[1];
-					(*readings)[deviceNumber] = temp;
-					(*_lastReadingMs)[deviceNumber] = millis();
+					int16_t temp = (message.data[2] << 8) | message.data[1];
+					(*readings)[device.number] = temp;
+					device.lastReadingsMs = millis();
 				}
 				break;
 				default:
-					print("Unknown command. ");
-					messagePrint(canId, length, data, false);
-					errorCode = 205;
-					errorInDeviceNumber = deviceNumber;
+					errorAdd(message, ERROR_COMMAND_UNKNOWN, false, true);
 				}
 			}
 			return true;
@@ -98,7 +95,7 @@ bool Mrm_therm_b_can::messageDecode(uint32_t canId, uint8_t data[8], uint8_t len
 */
 int16_t Mrm_therm_b_can::reading(uint8_t deviceNumber){
 	if (deviceNumber >= nextFree) {
-		sprintf(errorMessage, "%s %i doesn't exist.", _boardsName, deviceNumber);
+		sprintf(errorMessage, "%s %i doesn't exist.", _boardsName.c_str(), deviceNumber);
 		return 0;
 	}
 	else
@@ -112,9 +109,9 @@ int16_t Mrm_therm_b_can::reading(uint8_t deviceNumber){
 */
 void Mrm_therm_b_can::readingsPrint() {
 	print("Therm:");
-	for (uint8_t deviceNumber = 0; deviceNumber < nextFree; deviceNumber++)
-		if (alive(deviceNumber))
-			print(" %i", reading(deviceNumber));
+	for (Device& device: devices)
+		if (devices[device.number].alive)
+			print(" %i", reading(device.number));
 }
 
 
@@ -123,21 +120,21 @@ void Mrm_therm_b_can::readingsPrint() {
 @return - started or not
 */
 bool Mrm_therm_b_can::started(uint8_t deviceNumber) {
-	if (millis() - (*_lastReadingMs)[deviceNumber] > MRM_THERM_B_CAN_INACTIVITY_ALLOWED_MS || (*_lastReadingMs)[deviceNumber] == 0) {
+	if (millis() - devices[deviceNumber].lastReadingsMs > MRM_THERM_B_CAN_INACTIVITY_ALLOWED_MS || devices[deviceNumber].lastReadingsMs == 0) {
 		// print("Start mrm-therm-b-can-b%i \n\r", deviceNumber);
 		for (uint8_t i = 0; i < 8; i++) { // 8 tries
-			start(deviceNumber, 0);
+			start(&devices[deviceNumber], 0);
 			// Wait for 1. message.
 			uint32_t startMs = millis();
 			while (millis() - startMs < 50) {
-				if (millis() - (*_lastReadingMs)[deviceNumber] < 100) {
+				if (millis() - devices[deviceNumber].lastReadingsMs < 100) {
 					// print("Thermo confirmed\n\r"); 
 					return true;
 				}
-				robotContainer->delayMs(1);
+				delayMs(1);
 			}
 		}
-		sprintf(errorMessage, "%s %i dead.", _boardsName, deviceNumber);
+		sprintf(errorMessage, "%s %i dead.", _boardsName.c_str(), deviceNumber);
 		return false;
 	}
 	else
@@ -148,15 +145,15 @@ bool Mrm_therm_b_can::started(uint8_t deviceNumber) {
 */
 void Mrm_therm_b_can::test()
 {
-	static uint32_t lastMs = 0;
+	static uint64_t lastMs = 0;
 
 	if (millis() - lastMs > 300) {
 		uint8_t pass = 0;
-		for (uint8_t deviceNumber = 0; deviceNumber < nextFree; deviceNumber++) {
-			if (alive(deviceNumber)) {
+		for (Device& device: devices){
+			if (devices[device.number].alive) {
 				if (pass++)
 					print(" ");
-				print("%i ", reading(deviceNumber));
+				print("%i ", reading(device.number));
 			}
 		}
 		lastMs = millis();
